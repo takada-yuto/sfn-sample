@@ -7,7 +7,6 @@ import { AnyPrincipal, Effect, PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { BlockPublicAccess, Bucket } from "aws-cdk-lib/aws-s3"
 import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment"
 import { Construct } from "constructs"
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 export class SfnSampleStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
