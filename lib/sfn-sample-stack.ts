@@ -4,8 +4,12 @@ import {
   OriginAccessIdentity,
 } from "aws-cdk-lib/aws-cloudfront"
 import { AnyPrincipal, Effect, PolicyStatement } from "aws-cdk-lib/aws-iam"
+import { FunctionUrlAuthType, Runtime } from "aws-cdk-lib/aws-lambda"
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs"
 import { BlockPublicAccess, Bucket } from "aws-cdk-lib/aws-s3"
 import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment"
+import { DefinitionBody, StateMachine } from "aws-cdk-lib/aws-stepfunctions"
+import { CallAwsService } from "aws-cdk-lib/aws-stepfunctions-tasks"
 import { Construct } from "constructs"
 
 export class SfnSampleStack extends cdk.Stack {
@@ -51,6 +55,47 @@ export class SfnSampleStack extends cdk.Stack {
       }
     )
 
+    const bucket = new Bucket(this, "Bucket", {
+      bucketName: "kakakakakku-sandbox-stepfunctions-put-object",
+    })
+
+    const putObjectTask = new CallAwsService(this, "PutObjectTask", {
+      service: "s3",
+      action: "putObject",
+      parameters: {
+        Bucket: bucket.bucketName,
+        "Key.$": `States.Format('{}/{}', $$.Execution.Name, $.name)`,
+        "Body.$": "$.body",
+        ContentType: "application/json",
+      },
+      iamResources: ["*"],
+    })
+
+    const stateMachine = new StateMachine(this, "StateMachine", {
+      stateMachineName: "sandbox-cdk-stepfunctions-put-object",
+      definition: putObjectTask,
+    })
+
+    const startExecutionLambda = new NodejsFunction(this, "StartSfnLambda", {
+      runtime: Runtime.NODEJS_20_X,
+      handler: "handler",
+      entry: "lambda/start_sfn.ts",
+      environment: {
+        STATE_MACHINE_ARN: stateMachine.stateMachineArn,
+      },
+    })
+
+    stateMachine.grantStartExecution(startExecutionLambda)
+
+    // Lambda Function URLの設定
+    const functionUrl = startExecutionLambda.addFunctionUrl({
+      authType: FunctionUrlAuthType.NONE,
+    })
+
+    new cdk.CfnOutput(this, "FunctionUrl", {
+      value: functionUrl.url,
+    })
+
     const cloudfrontUrl = `https://${distribution.distributionDomainName}`
 
     // CloudFrontディストリビューションのドメイン名を出力
@@ -59,7 +104,12 @@ export class SfnSampleStack extends cdk.Stack {
     })
 
     new BucketDeployment(this, "SfnSampleFrontendBucketDeployment", {
-      sources: [Source.asset("frontend/out")],
+      sources: [
+        Source.asset("frontend/out"),
+        Source.jsonData("env.json", {
+          startSfnFunctionUrl: functionUrl.url,
+        }),
+      ],
       destinationBucket: frontendBucket,
       distribution: distribution,
       distributionPaths: ["/*"],
