@@ -90,6 +90,10 @@ export class SfnSampleStack extends cdk.Stack {
     // Lambda Function URLの設定
     const functionUrl = startExecutionLambda.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,
+      cors: {
+        allowedHeaders: ["*"],
+        allowedOrigins: ["*"],
+      },
     })
 
     new cdk.CfnOutput(this, "FunctionUrl", {
